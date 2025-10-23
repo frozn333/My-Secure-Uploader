@@ -1,4 +1,3 @@
-// models/User.js
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
@@ -12,9 +11,15 @@ const UserSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
-    password: { // This will store the HASHED password
+    password: {
         type: String,
         required: true
+    },
+    // NEW FIELD: Default role is 'user'
+    role: { 
+        type: String,
+        enum: ['user', 'admin'],
+        default: 'user'
     },
     createdAt: {
         type: Date,

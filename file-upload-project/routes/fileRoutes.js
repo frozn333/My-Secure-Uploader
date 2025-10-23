@@ -32,8 +32,6 @@ const upload = multer({
 });
 
 // -----------------------------------------------------------------
-// CRUD OPERATIONS
-// -----------------------------------------------------------------
 
 // @route POST /api/files/upload
 router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
@@ -64,8 +62,6 @@ router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
 });
 
 // @route PATCH /api/files/:projectId
-// @desc Renames a file's title in the database
-// @access Private (Owner Only)
 router.patch('/:projectId', auth, async (req, res) => {
     try {
         const { newName } = req.body;
@@ -84,7 +80,6 @@ router.patch('/:projectId', auth, async (req, res) => {
             return res.status(400).json({ msg: 'New name must be at least 3 characters long.' });
         }
 
-        // Update the name
         project.fileName = newName;
         await project.save();
 
@@ -98,12 +93,10 @@ router.patch('/:projectId', auth, async (req, res) => {
 
 
 // @route GET /api/files
-// @desc Get all projects: owned by user OR public
 router.get('/', auth, async (req, res) => {
     try {
         const userId = req.user.id;
         
-        // Find documents where: 1. userId matches the logged-in user OR 2. isPublic is true
         const projects = await Project.find({
             $or: [
                 { userId: userId },
@@ -129,7 +122,7 @@ router.get('/download/:projectId', auth, async (req, res) => {
             return res.status(404).json({ msg: 'File not found' });
         }
 
-        // AUTHORIZATION CHECK: Allow if: 1. User is the owner OR 2. File is marked as public
+        // AUTHORIZATION CHECK: 
         const isOwner = project.userId.toString() === req.user.id;
         const isAccessible = isOwner || project.isPublic;
 
@@ -137,19 +130,16 @@ router.get('/download/:projectId', auth, async (req, res) => {
             return res.status(401).json({ msg: 'Access denied. File is private.' });
         }
 
-        // 1. Get the file stream from S3
         const command = new GetObjectCommand({
             Bucket: process.env.AWS_S3_BUCKET_NAME,
             Key: project.fileKey,
         });
         const { Body, ContentType, ContentLength } = await s3Client.send(command);
 
-        // 2. Set headers for file download
         res.setHeader('Content-Type', ContentType || project.fileMimeType);
         res.setHeader('Content-Length', ContentLength);
         res.setHeader('Content-Disposition', `attachment; filename="${project.fileName}"`);
 
-        // 3. Pipe the S3 stream directly to the HTTP response
         if (Body instanceof require('stream').Readable) {
             Body.pipe(res);
         } else {
@@ -165,6 +155,8 @@ router.get('/download/:projectId', auth, async (req, res) => {
 
 
 // @route DELETE /api/files/:projectId
+// @desc Delete a specific project/file from S3 and DB
+// @access Private (Owner OR Admin)
 router.delete('/:projectId', auth, async (req, res) => {
     try {
         const project = await Project.findById(req.params.projectId);
@@ -172,10 +164,13 @@ router.delete('/:projectId', auth, async (req, res) => {
         if (!project) {
             return res.status(404).json({ msg: 'File not found' });
         }
+        
+        // CHECK IF USER IS OWNER OR ADMIN
+        const isOwner = project.userId.toString() === req.user.id;
+        const isAdmin = req.user.role === 'admin'; // CRITICAL ADMIN CHECK
 
-        // CRITICAL CHECK: ONLY THE OWNER CAN DELETE THE FILE
-        if (project.userId.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'You can only delete files you own.' });
+        if (!isOwner && !isAdmin) {
+            return res.status(401).json({ msg: 'You must be the owner or an administrator to delete this file.' });
         }
         
         // 2. DELETE PHYSICAL FILE from S3

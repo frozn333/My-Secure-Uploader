@@ -69,24 +69,28 @@ const Dashboard = () => {
 
     const getToken = () => localStorage.getItem('token');
     
-    // Helper to decode user ID for ownership checks
-    const getUserIdFromToken = () => {
+    // Helper to decode user ID and ROLE for ownership checks
+    const getUserIdAndRoleFromToken = () => {
         const token = getToken();
         if (token) {
             try {
+                // Tokens are base64-encoded. We need the second part (the payload).
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                return payload.user.id;
+                // CRITICAL: Extract both ID and ROLE (set in authRoutes.js)
+                return { id: payload.user.id, role: payload.user.role };
             } catch (e) {
-                return null;
+                // If decoding fails (e.g., token is invalid), treat as a guest user
+                return { id: null, role: 'user' };
             }
         }
-        return null;
+        return { id: null, role: 'user' };
     };
     
-    const currentUserId = getUserIdFromToken();
+    // Get user object when component mounts/renders
+    const currentUser = getUserIdAndRoleFromToken();
 
     // ----------------------------------------------------
-    // LOGOUT (MOVED TO TOP)
+    // LOGOUT
     // ----------------------------------------------------
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -94,7 +98,7 @@ const Dashboard = () => {
     };
     
     // ----------------------------------------------------
-    // FETCH PROJECTS (Now can safely call handleLogout)
+    // FETCH PROJECTS
     // ----------------------------------------------------
     const fetchProjects = async () => {
         setIsLoading(true);
@@ -105,7 +109,6 @@ const Dashboard = () => {
             setProjects(res.data);
         } catch (err) {
             console.error('Error fetching projects:', err.response?.data?.msg || err.message);
-            // This is the line that caused the error! It now works.
             if (err.response?.status === 401) handleLogout(); 
         } finally {
             setIsLoading(false);
@@ -113,7 +116,7 @@ const Dashboard = () => {
     };
     
     // ----------------------------------------------------
-    // UPLOAD FILE 
+    // UPLOAD FILE
     // ----------------------------------------------------
     const handleFileChange = (e) => {
         setFile(e.target.files[0]);
@@ -160,7 +163,7 @@ const Dashboard = () => {
     };
 
     // ----------------------------------------------------
-    // RENAME FILE 
+    // RENAME FILE
     // ----------------------------------------------------
     const handleRename = async (e, projectId) => {
         e.preventDefault();
@@ -219,6 +222,7 @@ const Dashboard = () => {
         }
 
         try {
+            // Note: The backend handles the permission check (Owner OR Admin)
             await axios.delete(`${API_BASE_URL}/${projectId}`, {
                 headers: { 'x-auth-token': getToken() }
             });
@@ -227,7 +231,6 @@ const Dashboard = () => {
             fetchProjects(); 
 
         } catch (err) {
-            console.error('Delete failed:', err);
             setUploadMessage({ text: err.response?.data?.msg || 'Deletion failed.', isError: true });
         }
     };
@@ -242,9 +245,11 @@ const Dashboard = () => {
         });
     };
     
+    const isOwner = (project) => project.userId === currentUser.id;
+    const isAdmin = currentUser.role === 'admin';
+    
     const getVisibilityLabel = (project) => {
-        const isOwner = project.userId === currentUserId;
-        if (isOwner) { 
+        if (isOwner(project)) { 
              return project.isPublic ? 'My File (Shared)' : 'My File (Private)';
         }
         if (project.isPublic) {
@@ -253,18 +258,18 @@ const Dashboard = () => {
         return 'Private';
     };
     
-    const canDelete = (project) => {
-        return project.userId === currentUserId;
-    };
+    // Delete permission: Owner OR Admin (Backend handles the final check)
+    const canDelete = (project) => isOwner(project) || isAdmin;
     
-    const canRename = (project) => {
-        return project.userId === currentUserId;
-    };
+    // Rename permission: ONLY Owner
+    const canRename = (project) => isOwner(project);
     
+    // Filter logic
     const filteredProjects = projects.filter(project => {
         if (filter === 'all') return true;
         if (filter === 'public') return project.isPublic;
-        if (filter === 'private') return project.isPublic === false && project.userId === currentUserId;
+        // Show private only if it belongs to the current user
+        if (filter === 'private') return project.isPublic === false && isOwner(project); 
         if (filter === 'image') return getFileCategory(project.fileMimeType) === 'image';
         if (filter === 'document') return getFileCategory(project.fileMimeType) === 'document' || getFileCategory(project.fileMimeType) === 'pdf';
         return true;
@@ -274,7 +279,6 @@ const Dashboard = () => {
     // LIFECYCLE
     // ----------------------------------------------------
     useEffect(() => {
-        // We call fetchProjects after the component mounts
         fetchProjects();
     }, []); 
 
@@ -287,6 +291,8 @@ const Dashboard = () => {
             <div style={styles.container}>
                 <header style={styles.header}>
                     <h1 style={styles.title}>Secure Storage Hub</h1>
+                    {/* NEW ADMIN BADGE */}
+                    {isAdmin && <span style={styles.adminBadge}>ADMIN</span>}
                     <button onClick={handleLogout} style={styles.logoutButton}>Logout</button>
                 </header>
                 
@@ -496,6 +502,16 @@ const styles = {
     title: { 
         color: '#1a4f8f', 
         fontWeight: '800' 
+    },
+    // NEW: Admin Badge Style
+    adminBadge: {
+        backgroundColor: '#ffc107',
+        color: '#333',
+        padding: '5px 10px',
+        borderRadius: '4px',
+        fontWeight: '700',
+        fontSize: '0.8em',
+        marginLeft: '15px'
     },
     logoutButton: { 
         padding: '10px 20px', 
