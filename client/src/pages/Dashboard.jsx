@@ -55,19 +55,21 @@ const FileIcon = ({ mimeType, url, isEditing }) => {
 
 
 const Dashboard = () => {
+    // --- STATE INITIALIZATION ---
     const [file, setFile] = useState(null);
     const [projects, setProjects] = useState([]);
     const [uploadMessage, setUploadMessage] = useState({}); 
     const [isLoading, setIsLoading] = useState(true);
     const [isPublic, setIsPublic] = useState(false); 
-    const [uploadProgress, setUploadProgress] = useState(0); // NEW: State for progress bar
-    const [editingId, setEditingId] = useState(null);      // NEW: State for renaming
-    const [newName, setNewName] = useState('');           // NEW: State for renaming
-    const [filter, setFilter] = useState('all');         // NEW: State for filtering
+    const [uploadProgress, setUploadProgress] = useState(0); 
+    const [editingId, setEditingId] = useState(null);     
+    const [newName, setNewName] = useState('');          
+    const [filter, setFilter] = useState('all');         
     const navigate = useNavigate();
 
     const getToken = () => localStorage.getItem('token');
     
+    // Helper to decode user ID for ownership checks
     const getUserIdFromToken = () => {
         const token = getToken();
         if (token) {
@@ -84,7 +86,15 @@ const Dashboard = () => {
     const currentUserId = getUserIdFromToken();
 
     // ----------------------------------------------------
-    // FETCH PROJECTS 
+    // LOGOUT (MOVED TO TOP)
+    // ----------------------------------------------------
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
+    
+    // ----------------------------------------------------
+    // FETCH PROJECTS (Now can safely call handleLogout)
     // ----------------------------------------------------
     const fetchProjects = async () => {
         setIsLoading(true);
@@ -95,18 +105,15 @@ const Dashboard = () => {
             setProjects(res.data);
         } catch (err) {
             console.error('Error fetching projects:', err.response?.data?.msg || err.message);
+            // This is the line that caused the error! It now works.
             if (err.response?.status === 401) handleLogout(); 
         } finally {
             setIsLoading(false);
         }
     };
-
-    useEffect(() => {
-        fetchProjects();
-    }, []); 
-
+    
     // ----------------------------------------------------
-    // UPLOAD FILE (Progress Bar Integrated)
+    // UPLOAD FILE 
     // ----------------------------------------------------
     const handleFileChange = (e) => {
         setFile(e.target.files[0]);
@@ -124,7 +131,7 @@ const Dashboard = () => {
         formData.append('isPublic', isPublic); 
 
         setUploadMessage({ text: 'Uploading...', isError: false });
-        setUploadProgress(0); // Start progress bar
+        setUploadProgress(0); 
 
         try {
             await axios.post(`${API_BASE_URL}/upload`, formData, {
@@ -132,7 +139,6 @@ const Dashboard = () => {
                     'x-auth-token': getToken(),
                     'Content-Type': 'multipart/form-data' 
                 },
-                // NEW: Progress tracking
                 onUploadProgress: (progressEvent) => {
                     const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                     setUploadProgress(percentCompleted);
@@ -141,7 +147,7 @@ const Dashboard = () => {
 
             setUploadMessage({ text: `Success: ${file.name} uploaded!`, isError: false });
             setUploadProgress(100);
-            setTimeout(() => setUploadProgress(0), 1000); // Hide progress bar after success
+            setTimeout(() => setUploadProgress(0), 1000); 
             setFile(null); 
             setIsPublic(false); 
             document.getElementById('file-input').value = null; 
@@ -154,7 +160,7 @@ const Dashboard = () => {
     };
 
     // ----------------------------------------------------
-    // RENAME FILE (New Feature)
+    // RENAME FILE 
     // ----------------------------------------------------
     const handleRename = async (e, projectId) => {
         e.preventDefault();
@@ -264,6 +270,14 @@ const Dashboard = () => {
         return true;
     });
     
+    // ----------------------------------------------------
+    // LIFECYCLE
+    // ----------------------------------------------------
+    useEffect(() => {
+        // We call fetchProjects after the component mounts
+        fetchProjects();
+    }, []); 
+
     // ----------------------------------------------------
     // RENDER LOGIC
     // ----------------------------------------------------
@@ -390,12 +404,11 @@ const Dashboard = () => {
                                                             placeholder="Enter new file name..."
                                                         />
                                                         <button type="submit" style={styles.renameSaveButton}>Save</button>
-                                                        <button onClick={() => setEditingId(null)} style={styles.renameCancelButton}>Cancel</button>
+                                                        <button type="button" onClick={() => setEditingId(null)} style={styles.renameCancelButton}>Cancel</button>
                                                     </form>
                                                 ) : (
                                                     <span 
                                                         style={styles.fileName}
-                                                        // Toggle rename mode on double-click by owner
                                                         onDoubleClick={() => { 
                                                             if (canRename(project)) {
                                                                 setEditingId(project._id);
