@@ -25,7 +25,6 @@ const upload = multer({
             cb(null, { userId: req.user.id });
         },
         key: (req, file, cb) => {
-            // Define the unique key (name) the file will have in S3
             const fileKey = `user-${req.user.id}-${Date.now()}-${file.originalname.replace(/ /g, '_')}`;
             cb(null, fileKey);
         }
@@ -35,7 +34,7 @@ const upload = multer({
 // -----------------------------------------------------------------
 
 // @route POST /api/files/upload
-// @desc Upload a new project/file to S3
+// @desc Upload a new project/file to S3, saving 'isPublic' state
 // @access Private
 router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
     try {
@@ -43,13 +42,17 @@ router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
             return res.status(400).json({ msg: 'No file uploaded.' });
         }
         
+        // Extract isPublic state from the form body (it comes as text 'true'/'false')
+        const isPublic = req.body.isPublic === 'true'; 
+
         // 1. Create a new Project document in the database
         const newProject = new Project({
             userId: req.user.id, 
             fileName: req.file.originalname,
-            fileUrl: req.file.location, // S3 provides the public location URL 
-            fileKey: req.file.key,       // S3 key for deletion
-            fileMimeType: req.file.mimetype
+            fileUrl: req.file.location,
+            fileKey: req.file.key,       
+            fileMimeType: req.file.mimetype,
+            isPublic: isPublic // Save the user's sharing choice
         });
 
         // 2. Save the metadata
@@ -65,11 +68,22 @@ router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
 
 
 // @route GET /api/files
-// @desc Get all projects for the logged-in user
+// @desc Get all projects: owned by user OR public
 // @access Private
 router.get('/', auth, async (req, res) => {
     try {
-        const projects = await Project.find({ userId: req.user.id }).sort({ uploadDate: -1 });
+        const userId = req.user.id;
+        
+        // Find documents where: 
+        // 1. userId matches the logged-in user OR
+        // 2. isPublic is true
+        const projects = await Project.find({
+            $or: [
+                { userId: userId },
+                { isPublic: true }
+            ]
+        }).sort({ uploadDate: -1 });
+
         res.json(projects);
 
     } catch (err) {
@@ -90,9 +104,15 @@ router.get('/download/:projectId', auth, async (req, res) => {
             return res.status(404).json({ msg: 'File not found' });
         }
 
-        // SECURITY CHECK: Ensure the logged-in user owns this file
-        if (project.userId.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'User not authorized to download this file' });
+        // AUTHORIZATION CHECK: 
+        // Allow if: 
+        // 1. User is the owner OR 
+        // 2. File is marked as public
+        const isOwner = project.userId.toString() === req.user.id;
+        const isAccessible = isOwner || project.isPublic;
+
+        if (!isAccessible) {
+            return res.status(401).json({ msg: 'Access denied. File is private.' });
         }
 
         // Generate a temporary signed URL for secure download
@@ -102,9 +122,7 @@ router.get('/download/:projectId', auth, async (req, res) => {
             ResponseContentDisposition: `attachment; filename="${project.fileName}"`
         });
 
-        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); // URL valid for 1 hour
-
-        // Redirect user to the signed URL for download (the file comes from S3)
+        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); 
         res.redirect(signedUrl);
 
     } catch (err) {
@@ -116,7 +134,7 @@ router.get('/download/:projectId', auth, async (req, res) => {
 
 // @route DELETE /api/files/:projectId
 // @desc Delete a specific project/file from S3 and DB
-// @access Private
+// @access Private (Only owners can delete)
 router.delete('/:projectId', auth, async (req, res) => {
     try {
         const project = await Project.findById(req.params.projectId);
@@ -125,9 +143,9 @@ router.delete('/:projectId', auth, async (req, res) => {
             return res.status(404).json({ msg: 'File not found' });
         }
 
-        // 1. SECURITY CHECK: Ensure the logged-in user owns this file
+        // CRITICAL CHECK: ONLY THE OWNER CAN DELETE THE FILE
         if (project.userId.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'User not authorized to delete this file' });
+            return res.status(401).json({ msg: 'You can only delete files you own.' });
         }
         
         // 2. DELETE PHYSICAL FILE from S3

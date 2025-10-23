@@ -10,17 +10,21 @@ const ProjectSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    fileUrl: { // Stores the public S3 URL
+    fileUrl: {
         type: String,
         required: true
     },
-    fileKey: { // Stores the unique S3 identifier (for deletion)
+    fileKey: {
         type: String,
         required: true
     },
     fileMimeType: {
         type: String,
         required: true
+    },
+    isPublic: { // NEW FIELD: True if anyone logged in can view/download
+        type: Boolean,
+        default: false 
     },
     uploadDate: {
         type: Date,
