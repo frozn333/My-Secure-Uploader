@@ -1,22 +1,24 @@
-// models/Project.js
 const mongoose = require('mongoose');
 
 const ProjectSchema = new mongoose.Schema({
     userId: {
-        // This links the project back to the user who uploaded it
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User', 
         required: true
     },
-    fileName: { // The original name of the file
+    fileName: {
         type: String,
         required: true
     },
-    filePath: { // The path where Multer saved the file on the server (e.g., 'uploads/...')
+    fileUrl: { // Stores the public S3 URL
         type: String,
         required: true
     },
-    fileMimeType: { // File type (e.g., 'image/png')
+    fileKey: { // Stores the unique S3 identifier (for deletion)
+        type: String,
+        required: true
+    },
+    fileMimeType: {
         type: String,
         required: true
     },
@@ -26,5 +28,4 @@ const ProjectSchema = new mongoose.Schema({
     }
 });
 
-// Export the model so it can be used in your routes
 module.exports = mongoose.model('Project', ProjectSchema);

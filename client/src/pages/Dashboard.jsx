@@ -73,28 +73,11 @@ const Dashboard = () => {
     };
 
     // ----------------------------------------------------
-    // DOWNLOAD FILE
+    // DOWNLOAD FILE (Simply redirects to the signed URL endpoint)
     // ----------------------------------------------------
-    const handleDownload = async (projectId, fileName) => {
-        try {
-            const res = await axios.get(`${API_BASE_URL}/download/${projectId}`, {
-                headers: { 'x-auth-token': getToken() },
-                responseType: 'blob' 
-            });
-
-            const url = window.URL.createObjectURL(new Blob([res.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', fileName);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url); 
-
-        } catch (err) {
-            console.error('Download failed:', err);
-            setUploadMessage({ text: 'Download failed. File may not exist or permission denied.', isError: true });
-        }
+    const handleDownload = (projectId) => {
+        // The backend endpoint generates a signed S3 URL and redirects the browser for secure download.
+        window.location.href = `${API_BASE_URL}/download/${projectId}`;
     };
     
     // ----------------------------------------------------
@@ -111,7 +94,7 @@ const Dashboard = () => {
             });
             
             setUploadMessage({ text: `Deleted: ${fileName}`, isError: false });
-            fetchProjects(); 
+            fetchProjects(); // Refresh the list
 
         } catch (err) {
             console.error('Delete failed:', err);
@@ -151,7 +134,7 @@ const Dashboard = () => {
                             id="file-input"
                             onChange={handleFileChange} 
                             required 
-                            style={styles.hiddenFileInput} // NEW STYLE
+                            style={styles.hiddenFileInput} 
                         />
                         
                         {/* 2. The VISIBLE label that acts as the button */}
@@ -188,7 +171,7 @@ const Dashboard = () => {
                                         </div>
                                         <div style={styles.buttonGroup}>
                                             <button 
-                                                onClick={() => handleDownload(project._id, project.fileName)} 
+                                                onClick={() => handleDownload(project._id)} 
                                                 style={styles.downloadButton}>
                                                 Download
                                             </button>
@@ -267,11 +250,11 @@ const styles = {
         alignItems: 'center', 
         flexWrap: 'wrap' 
     },
-    // NEW STYLE: Hide the default input button
+    // Hide the default input button
     hiddenFileInput: {
         display: 'none',
     },
-    // NEW STYLE: Style the label to look like a file preview/button
+    // Style the label to look like a file preview/button
     fileLabel: {
         padding: '12px 15px',
         border: '2px dashed #a0c4ff', // Light blue dashed line for soft border
