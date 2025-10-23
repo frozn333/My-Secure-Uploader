@@ -25,7 +25,7 @@ router.post('/register', async (req, res) => {
         // CRITICAL STEP: HARDCODE YOUR ADMIN USER
         // If the registering user is YOU (use YOUR specific email), set the role to 'admin'.
         let role = 'user';
-        if (email === 'YOUR_ADMIN_EMAIL_HERE') { // <-- REPLACE THIS EMAIL
+        if (email === 'krolikmakrolik228@gmail.com') { // <-- REPLACE THIS EMAIL
              role = 'admin';
         }
         
