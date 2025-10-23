@@ -13,6 +13,25 @@ const Dashboard = () => {
     const navigate = useNavigate();
 
     const getToken = () => localStorage.getItem('token');
+    
+    // Get the user ID from the JWT token (we need this to check ownership in the list)
+    // NOTE: This is a simplified way to get the ID without decoding the whole token
+    const getUserIdFromToken = () => {
+        const token = getToken();
+        if (token) {
+            try {
+                // Tokens are base64-encoded strings separated by dots. The second part is the payload.
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.user.id;
+            } catch (e) {
+                console.error("Failed to decode token:", e);
+                return null;
+            }
+        }
+        return null;
+    };
+    
+    const currentUserId = getUserIdFromToken();
 
     // ----------------------------------------------------
     // FETCH PROJECTS (Read operation)
@@ -34,6 +53,7 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchProjects();
+        // Since we need the userId immediately, we rely on the helper above.
     }, []); 
 
     // ----------------------------------------------------
@@ -52,7 +72,7 @@ const Dashboard = () => {
 
         const formData = new FormData();
         formData.append('projectFile', file); 
-        formData.append('isPublic', isPublic); // NEW: Append the public state
+        formData.append('isPublic', isPublic); // Append the public state
 
         setUploadMessage({ text: 'Uploading...', isError: false });
 
@@ -76,10 +96,9 @@ const Dashboard = () => {
     };
 
     // ----------------------------------------------------
-    // DOWNLOAD FILE (Simply redirects to the signed URL endpoint)
+    // DOWNLOAD FILE
     // ----------------------------------------------------
     const handleDownload = (projectId) => {
-        // The backend endpoint handles the security check and redirection to S3.
         window.location.href = `${API_BASE_URL}/download/${projectId}`;
     };
     
@@ -97,7 +116,7 @@ const Dashboard = () => {
             });
             
             setUploadMessage({ text: `Deleted: ${fileName}`, isError: false });
-            fetchProjects(); // Refresh the list
+            fetchProjects(); 
 
         } catch (err) {
             console.error('Delete failed:', err);
@@ -125,13 +144,21 @@ const Dashboard = () => {
     
     // Helper to determine icon/label for file visibility
     const getVisibilityLabel = (project) => {
-        if (project.userId.toString() === localStorage.getItem('userId')) { // We don't have user ID in local storage but checking if we do is good. Let's rely on isPublic
-             return 'Private';
+        // If the logged-in user is the owner, it's always "My File"
+        if (project.userId === currentUserId) { 
+             return project.isPublic ? 'My File (Shared)' : 'My File (Private)';
         }
+        // If the logged-in user is NOT the owner, but sees the file, it must be public
         if (project.isPublic) {
-            return 'Public (Shared)';
+            return 'Public (Shared by another user)';
         }
         return 'Private';
+    };
+    
+    // Helper to determine if the delete button should be visible
+    const canDelete = (project) => {
+        // Only the original owner can delete the file
+        return project.userId === currentUserId;
     };
 
     return (
@@ -171,7 +198,14 @@ const Dashboard = () => {
                                     onChange={(e) => setIsPublic(e.target.checked)}
                                     style={styles.toggleCheckbox}
                                 />
-                                <label htmlFor="public-toggle" style={styles.toggleSwitch} />
+                                {/* CRITICAL FIX: Inline style used to access isPublic state */}
+                                <label 
+                                    htmlFor="public-toggle" 
+                                    style={{
+                                        ...styles.toggleSwitch,
+                                        backgroundColor: isPublic ? '#38b2ac' : '#ccc' // Green when public
+                                    }} 
+                                />
                             </div>
 
                         </div>
@@ -215,8 +249,8 @@ const Dashboard = () => {
                                                 style={styles.downloadButton}>
                                                 Download
                                             </button>
-                                            {/* Only owners can delete */}
-                                            {(project.userId.toString() === localStorage.getItem('userId') || project.isPublic) && ( 
+                                            {/* Only the owner of the file can delete it */}
+                                            {canDelete(project) && ( 
                                                 <button 
                                                     onClick={() => handleDelete(project._id, project.fileName)} 
                                                     style={styles.deleteButton}>
@@ -227,7 +261,7 @@ const Dashboard = () => {
                                     </li>
                                 ))
                             ) : (
-                                <li style={styles.noFiles}>No projects uploaded yet. Use the form above to add your first file!</li>
+                                <li style={styles.noFiles}>No projects found, but you can upload one!</li>
                             )}
                         </ul>
                     )}
@@ -328,7 +362,7 @@ const styles = {
         cursor: 'pointer', 
         fontWeight: '600', 
         transition: 'background-color 0.2s',
-        alignSelf: 'flex-start' // Align with the top of the file input group
+        alignSelf: 'flex-start' 
     },
     message: { 
         marginTop: '15px', 
@@ -417,28 +451,11 @@ const styles = {
         cursor: 'pointer',
         width: '40px',
         height: '22px',
-        backgroundColor: '#ccc',
         display: 'block',
         borderRadius: '11px',
         position: 'relative',
         transition: 'background-color 0.2s',
-    },
-    // The visual indicator for the switch
-    // NOTE: This is complex styling usually done in a real CSS file or using styled components. 
-    // This inline style is the closest we can get without a dedicated CSS file.
-    // For a clean switch, we rely on the checkbox state via CSS properties which is difficult with React inline styles.
-    // We'll use a simplified style that clearly indicates state:
-    toggleSwitch: {
-        cursor: 'pointer',
-        width: '40px',
-        height: '22px',
-        backgroundColor: isPublic ? '#1a4f8f' : '#ccc',
-        display: 'block',
-        borderRadius: '11px',
-        position: 'relative',
-        transition: 'background-color 0.2s',
-        // Visual knob (this part is tricky to do purely inline):
-        // We'll just rely on the background color change for simplicity in this file.
+        // The inline style for background color is applied in the JSX render function
     }
 };
 
