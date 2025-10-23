@@ -1,8 +1,9 @@
 /* Global Reset and Layout */
 * {
-  box-sizing: border-box;
+  box-sizing: border-box; /* Crucial: Ensures padding/border are included in the element's total width and height. */
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent; /* Improves mobile touch experience */
 }
 
 body {
@@ -10,10 +11,13 @@ body {
   width: 100%;
   min-height: 100vh;
   line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  /* Font and Cozy Cool Background Color */
+  -webkit-font-smoothing: antialiased; 
   font-family: 'Inter', sans-serif;
   background-color: #eef2f6; 
+  
+  /* Safari/iOS Specific Fixes */
+  min-width: 320px; /* Prevents layout issues on very small screens */
+  overflow-x: hidden; /* Prevents horizontal scrolling/zooming */
 }
 
 /* Ensure the root element covers the full space */

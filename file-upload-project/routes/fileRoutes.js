@@ -32,10 +32,10 @@ const upload = multer({
 });
 
 // -----------------------------------------------------------------
+// CRUD OPERATIONS
+// -----------------------------------------------------------------
 
 // @route POST /api/files/upload
-// @desc Upload a new project/file to S3, saving 'isPublic' state
-// @access Private
 router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
     try {
         if (!req.file) {
@@ -63,10 +63,42 @@ router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
     }
 });
 
+// @route PATCH /api/files/:projectId
+// @desc Renames a file's title in the database
+// @access Private (Owner Only)
+router.patch('/:projectId', auth, async (req, res) => {
+    try {
+        const { newName } = req.body;
+        const project = await Project.findById(req.params.projectId);
+
+        if (!project) {
+            return res.status(404).json({ msg: 'File not found' });
+        }
+        
+        // CRITICAL CHECK: ONLY THE OWNER CAN RENAME
+        if (project.userId.toString() !== req.user.id) {
+            return res.status(401).json({ msg: 'You can only rename files you own.' });
+        }
+        
+        if (!newName || newName.length < 3) {
+            return res.status(400).json({ msg: 'New name must be at least 3 characters long.' });
+        }
+
+        // Update the name
+        project.fileName = newName;
+        await project.save();
+
+        res.json({ msg: 'File renamed successfully.', project });
+
+    } catch (err) {
+        console.error('Rename Error:', err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 
 // @route GET /api/files
 // @desc Get all projects: owned by user OR public
-// @access Private
 router.get('/', auth, async (req, res) => {
     try {
         const userId = req.user.id;
@@ -89,8 +121,6 @@ router.get('/', auth, async (req, res) => {
 
 
 // @route GET /api/files/download/:projectId
-// @desc Stream file from S3 directly to authenticated user via Axios
-// @access Private
 router.get('/download/:projectId', auth, async (req, res) => {
     try {
         const project = await Project.findById(req.params.projectId);
@@ -135,8 +165,6 @@ router.get('/download/:projectId', auth, async (req, res) => {
 
 
 // @route DELETE /api/files/:projectId
-// @desc Delete a specific project/file from S3 and DB
-// @access Private (Only owners can delete)
 router.delete('/:projectId', auth, async (req, res) => {
     try {
         const project = await Project.findById(req.params.projectId);
@@ -170,4 +198,4 @@ router.delete('/:projectId', auth, async (req, res) => {
 });
 
 
-module.exports = router;   
+module.exports = router;
