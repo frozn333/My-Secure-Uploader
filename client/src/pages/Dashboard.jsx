@@ -7,24 +7,21 @@ const API_BASE_URL = `${import.meta.env.VITE_API_URL}/api/files`;
 const Dashboard = () => {
     const [file, setFile] = useState(null);
     const [projects, setProjects] = useState([]);
-    const [uploadMessage, setUploadMessage] = useState({}); // { text, isError }
+    const [uploadMessage, setUploadMessage] = useState({}); 
     const [isLoading, setIsLoading] = useState(true);
-    const [isPublic, setIsPublic] = useState(false); // NEW STATE for sharing toggle
+    const [isPublic, setIsPublic] = useState(false); 
     const navigate = useNavigate();
 
     const getToken = () => localStorage.getItem('token');
     
-    // Get the user ID from the JWT token (we need this to check ownership in the list)
-    // NOTE: This is a simplified way to get the ID without decoding the whole token
+    // Helper to decode user ID for ownership checks
     const getUserIdFromToken = () => {
         const token = getToken();
         if (token) {
             try {
-                // Tokens are base64-encoded strings separated by dots. The second part is the payload.
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 return payload.user.id;
             } catch (e) {
-                console.error("Failed to decode token:", e);
                 return null;
             }
         }
@@ -34,7 +31,7 @@ const Dashboard = () => {
     const currentUserId = getUserIdFromToken();
 
     // ----------------------------------------------------
-    // FETCH PROJECTS (Read operation)
+    // FETCH PROJECTS 
     // ----------------------------------------------------
     const fetchProjects = async () => {
         setIsLoading(true);
@@ -53,11 +50,10 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchProjects();
-        // Since we need the userId immediately, we rely on the helper above.
     }, []); 
 
     // ----------------------------------------------------
-    // UPLOAD FILE (Create operation)
+    // UPLOAD FILE 
     // ----------------------------------------------------
     const handleFileChange = (e) => {
         setFile(e.target.files[0]);
@@ -72,7 +68,7 @@ const Dashboard = () => {
 
         const formData = new FormData();
         formData.append('projectFile', file); 
-        formData.append('isPublic', isPublic); // Append the public state
+        formData.append('isPublic', isPublic); 
 
         setUploadMessage({ text: 'Uploading...', isError: false });
 
@@ -86,7 +82,7 @@ const Dashboard = () => {
 
             setUploadMessage({ text: `Success: ${file.name} uploaded!`, isError: false });
             setFile(null); 
-            setIsPublic(false); // Reset switch after successful upload
+            setIsPublic(false); 
             document.getElementById('file-input').value = null; 
             fetchProjects(); 
 
@@ -96,36 +92,36 @@ const Dashboard = () => {
     };
 
     // ----------------------------------------------------
-    // DOWNLOAD FILE
+    // DOWNLOAD FILE (CORRECTED to pass fileName)
     // ----------------------------------------------------
     const handleDownload = async (projectId, fileName) => {
-    try {
-        // 1. Send an authenticated GET request to the backend
-        const res = await axios.get(`${API_BASE_URL}/download/${projectId}`, {
-            headers: { 'x-auth-token': getToken() },
-            // Tell Axios to expect binary data (the file)
-            responseType: 'blob' 
-        });
+        try {
+            // 1. Send an authenticated GET request to the backend
+            const res = await axios.get(`${API_BASE_URL}/download/${projectId}`, {
+                headers: { 'x-auth-token': getToken() },
+                // Tell Axios to expect binary data (the file)
+                responseType: 'blob' 
+            });
 
-        // 2. Create a temporary object URL in the browser
-        const url = window.URL.createObjectURL(new Blob([res.data]));
-        
-        // 3. Create a temporary <a> element and click it to force download
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', fileName); // Use the correct filename
-        document.body.appendChild(link);
-        link.click();
-        
-        // 4. Clean up the temporary link and URL object
-        link.remove();
-        window.URL.revokeObjectURL(url); 
+            // 2. Create a temporary object URL in the browser
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            
+            // 3. Create a temporary <a> element and click it to force download
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', fileName); // NOW THE FILENAME IS CORRECTLY SET
+            document.body.appendChild(link);
+            link.click();
+            
+            // 4. Clean up
+            link.remove();
+            window.URL.revokeObjectURL(url); 
 
-    } catch (err) {
-        console.error('Download failed:', err);
-        setUploadMessage({ text: 'Download failed. Check file access or try logging in again.', isError: true });
-    }
-};
+        } catch (err) {
+            console.error('Download failed:', err);
+            setUploadMessage({ text: 'Download failed. Check file access or try logging in again.', isError: true });
+        }
+    };
     
     // ----------------------------------------------------
     // DELETE FILE
@@ -167,22 +163,17 @@ const Dashboard = () => {
         });
     };
     
-    // Helper to determine icon/label for file visibility
     const getVisibilityLabel = (project) => {
-        // If the logged-in user is the owner, it's always "My File"
         if (project.userId === currentUserId) { 
              return project.isPublic ? 'My File (Shared)' : 'My File (Private)';
         }
-        // If the logged-in user is NOT the owner, but sees the file, it must be public
         if (project.isPublic) {
             return 'Public (Shared by another user)';
         }
         return 'Private';
     };
     
-    // Helper to determine if the delete button should be visible
     const canDelete = (project) => {
-        // Only the original owner can delete the file
         return project.userId === currentUserId;
     };
 
@@ -213,7 +204,7 @@ const Dashboard = () => {
                                 {file ? file.name : 'Select File'}
                             </label>
                             
-                            {/* NEW: Sharing Toggle */}
+                            {/* Sharing Toggle */}
                             <div style={styles.toggleContainer}>
                                 <span style={styles.toggleLabel}>Share Publicly</span>
                                 <input 
@@ -223,12 +214,11 @@ const Dashboard = () => {
                                     onChange={(e) => setIsPublic(e.target.checked)}
                                     style={styles.toggleCheckbox}
                                 />
-                                {/* CRITICAL FIX: Inline style used to access isPublic state */}
                                 <label 
                                     htmlFor="public-toggle" 
                                     style={{
                                         ...styles.toggleSwitch,
-                                        backgroundColor: isPublic ? '#38b2ac' : '#ccc' // Green when public
+                                        backgroundColor: isPublic ? '#38b2ac' : '#ccc' 
                                     }} 
                                 />
                             </div>
@@ -270,11 +260,12 @@ const Dashboard = () => {
                                         </div>
                                         <div style={styles.buttonGroup}>
                                             <button 
-                                                onClick={() => handleDownload(project._id)} 
+                                                // FINAL CALL: Pass both ID and Name!
+                                                onClick={() => handleDownload(project._id, project.fileName)} 
                                                 style={styles.downloadButton}>
                                                 Download
                                             </button>
-                                            {/* Only the owner of the file can delete it */}
+                                            
                                             {canDelete(project) && ( 
                                                 <button 
                                                     onClick={() => handleDelete(project._id, project.fileName)} 
@@ -480,7 +471,6 @@ const styles = {
         borderRadius: '11px',
         position: 'relative',
         transition: 'background-color 0.2s',
-        // The inline style for background color is applied in the JSX render function
     }
 };
 
