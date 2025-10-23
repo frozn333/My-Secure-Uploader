@@ -1,0 +1,23 @@
+/* Global Reset and Layout */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* Ensure the body itself takes up the whole viewport */
+  width: 100%;
+  min-height: 100vh;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* Font and Cozy Cool Background Color */
+  font-family: 'Inter', sans-serif;
+  background-color: #eef2f6; 
+}
+
+/* Ensure the root element covers the full space */
+#root {
+  width: 100%;
+  min-height: 100vh;
+}

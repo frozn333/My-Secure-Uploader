@@ -1,0 +1,13 @@
+#dependencies folders - HUGE files, don't upload them!
+
+/node_modules
+/client/node_modules
+
+#build folders - Compiled files that we re-create online
+
+/client/dist
+
+#secrets - NEVER upload passwords or keys!
+
+.env
+/client/.env
