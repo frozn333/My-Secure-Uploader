@@ -42,20 +42,17 @@ router.post('/upload', auth, upload.single('projectFile'), async (req, res) => {
             return res.status(400).json({ msg: 'No file uploaded.' });
         }
         
-        // Extract isPublic state from the form body (it comes as text 'true'/'false')
         const isPublic = req.body.isPublic === 'true'; 
 
-        // 1. Create a new Project document in the database
         const newProject = new Project({
             userId: req.user.id, 
             fileName: req.file.originalname,
-            fileUrl: req.file.location,
+            fileUrl: req.file.location, 
             fileKey: req.file.key,       
             fileMimeType: req.file.mimetype,
-            isPublic: isPublic // Save the user's sharing choice
+            isPublic: isPublic 
         });
 
-        // 2. Save the metadata
         const project = await newProject.save();
 
         res.json({ msg: 'File uploaded and saved!', project });
@@ -74,9 +71,7 @@ router.get('/', auth, async (req, res) => {
     try {
         const userId = req.user.id;
         
-        // Find documents where: 
-        // 1. userId matches the logged-in user OR
-        // 2. isPublic is true
+        // Find documents where: 1. userId matches the logged-in user OR 2. isPublic is true
         const projects = await Project.find({
             $or: [
                 { userId: userId },
@@ -94,7 +89,7 @@ router.get('/', auth, async (req, res) => {
 
 
 // @route GET /api/files/download/:projectId
-// @desc Download a specific project/file from S3 via signed URL
+// @desc Stream file from S3 directly to authenticated user via Axios
 // @access Private
 router.get('/download/:projectId', auth, async (req, res) => {
     try {
@@ -104,10 +99,7 @@ router.get('/download/:projectId', auth, async (req, res) => {
             return res.status(404).json({ msg: 'File not found' });
         }
 
-        // AUTHORIZATION CHECK: 
-        // Allow if: 
-        // 1. User is the owner OR 
-        // 2. File is marked as public
+        // AUTHORIZATION CHECK: Allow if: 1. User is the owner OR 2. File is marked as public
         const isOwner = project.userId.toString() === req.user.id;
         const isAccessible = isOwner || project.isPublic;
 
@@ -115,15 +107,25 @@ router.get('/download/:projectId', auth, async (req, res) => {
             return res.status(401).json({ msg: 'Access denied. File is private.' });
         }
 
-        // Generate a temporary signed URL for secure download
+        // 1. Get the file stream from S3
         const command = new GetObjectCommand({
             Bucket: process.env.AWS_S3_BUCKET_NAME,
             Key: project.fileKey,
-            ResponseContentDisposition: `attachment; filename="${project.fileName}"`
         });
+        const { Body, ContentType, ContentLength } = await s3Client.send(command);
 
-        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); 
-        res.redirect(signedUrl);
+        // 2. Set headers for file download
+        res.setHeader('Content-Type', ContentType || project.fileMimeType);
+        res.setHeader('Content-Length', ContentLength);
+        res.setHeader('Content-Disposition', `attachment; filename="${project.fileName}"`);
+
+        // 3. Pipe the S3 stream directly to the HTTP response
+        if (Body instanceof require('stream').Readable) {
+            Body.pipe(res);
+        } else {
+            res.send(Body);
+        }
+
 
     } catch (err) {
         console.error('S3 Download Error:', err.message);
@@ -168,4 +170,4 @@ router.delete('/:projectId', auth, async (req, res) => {
 });
 
 
-module.exports = router;
+module.exports = router;   

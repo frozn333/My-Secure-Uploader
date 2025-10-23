@@ -98,9 +98,34 @@ const Dashboard = () => {
     // ----------------------------------------------------
     // DOWNLOAD FILE
     // ----------------------------------------------------
-    const handleDownload = (projectId) => {
-        window.location.href = `${API_BASE_URL}/download/${projectId}`;
-    };
+    const handleDownload = async (projectId, fileName) => {
+    try {
+        // 1. Send an authenticated GET request to the backend
+        const res = await axios.get(`${API_BASE_URL}/download/${projectId}`, {
+            headers: { 'x-auth-token': getToken() },
+            // Tell Axios to expect binary data (the file)
+            responseType: 'blob' 
+        });
+
+        // 2. Create a temporary object URL in the browser
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        
+        // 3. Create a temporary <a> element and click it to force download
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName); // Use the correct filename
+        document.body.appendChild(link);
+        link.click();
+        
+        // 4. Clean up the temporary link and URL object
+        link.remove();
+        window.URL.revokeObjectURL(url); 
+
+    } catch (err) {
+        console.error('Download failed:', err);
+        setUploadMessage({ text: 'Download failed. Check file access or try logging in again.', isError: true });
+    }
+};
     
     // ----------------------------------------------------
     // DELETE FILE
